@@ -7,7 +7,7 @@ import (
 	"io"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -147,6 +147,7 @@ func (m *_monitor) readloop(
 		Container:    m.source.Container(),
 		Follow:       true,
 		SinceSeconds: since,
+		Timestamps:   true,
 	}
 
 	req := client.
@@ -193,16 +194,13 @@ func (m *_monitor) readloop(
 	return nil
 }
 
+// deliverEvents is responsible for sending the Events on th event channel, this will
+// block until all events are sent _or_ until the context is cancelled.
 func (m *_monitor) deliverEvents(ctx context.Context, events []Event) {
-	t := time.NewTimer(monitorDeliverWait)
-	defer t.Stop()
 
-	for i, event := range events {
+	for _, event := range events {
 		select {
 		case m.eventch <- event:
-		case <-t.C:
-			m.log.Warnf("event buffer full. dropping %v logs", len(events)-i)
-			return
 		case <-ctx.Done():
 			return
 		}
